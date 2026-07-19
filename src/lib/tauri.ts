@@ -28,33 +28,14 @@ export async function testAI(config: AIConfig): Promise<string> {
 }
 
 // ============================================================
-// Online update
+// Online update — Tauri official updater plugin
+// (signature-verified, auto-install, restart via relaunch)
 // ============================================================
 
-export interface UpdateAsset {
-  name: string;
-  browser_download_url: string;
-  size: number;
-}
+export { check } from "@tauri-apps/plugin-updater";
+export type { Update, DownloadEvent } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 
-export interface UpdateInfo {
-  current_version: string;
-  latest_version: string;
-  has_update: boolean;
-  release_name: string | null;
-  release_notes: string | null;
-  release_url: string;
-  published_at: string | null;
-  assets: UpdateAsset[];
-}
-
-export async function checkUpdate(): Promise<UpdateInfo> {
-  return await invoke<UpdateInfo>("check_update");
-}
-
-export async function downloadUpdate(
-  url: string,
-  filename: string,
-): Promise<string> {
-  return await invoke<string>("download_update", { url, filename });
+export async function relaunchApp(): Promise<void> {
+  await relaunch();
 }

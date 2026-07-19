@@ -2,7 +2,13 @@ import { useState } from "react";
 import type { AIConfig, AIProvider } from "../types";
 import { PROVIDER_PRESETS } from "../types";
 import { Icon } from "./Icon";
-import { checkUpdate, downloadUpdate, testAI, type UpdateInfo } from "../lib/tauri";
+import {
+  check,
+  relaunchApp,
+  testAI,
+  type Update,
+  type DownloadEvent,
+} from "../lib/tauri";
 import type { EditorFont } from "../lib/storage";
 import { EDITOR_FONT_OPTIONS } from "../lib/storage";
 
@@ -32,12 +38,17 @@ export function SettingsModal({
   }>({ state: "idle", msg: "" });
 
   // Online update state
-  type UpdateState =
-    | { kind: "idle" }
-    | { kind: "checking" }
-    | { kind: "result"; info: UpdateInfo; downloading: boolean; downloadedTo?: string }
-    | { kind: "error"; msg: string };
-  const [updateState, setUpdateState] = useState<UpdateState>({ kind: "idle" });
+  type UpdatePhase =
+    | "idle"
+    | "checking"
+    | "downloading"
+    | "ready"   // downloaded & installed, awaiting user click to restart
+    | "uptodate"
+    | "error";
+  const [updatePhase, setUpdatePhase] = useState<UpdatePhase>("idle");
+  const [updateObj, setUpdateObj] = useState<Update | null>(null);
+  const [downloadPct, setDownloadPct] = useState<number>(0);
+  const [updateError, setUpdateError] = useState<string>("");
 
   const handleProviderChange = (provider: AIProvider) => {
     const preset = PROVIDER_PRESETS.find((p) => p.id === provider);
@@ -73,40 +84,54 @@ export function SettingsModal({
   };
 
   const handleCheckUpdate = async () => {
-    setUpdateState({ kind: "checking" });
+    setUpdatePhase("checking");
+    setUpdateError("");
     try {
-      const info = await checkUpdate();
-      setUpdateState({ kind: "result", info, downloading: false });
+      const update = await check();
+      if (update === null) {
+        setUpdatePhase("uptodate");
+        setUpdateObj(null);
+      } else {
+        setUpdatePhase("idle");
+        setUpdateObj(update);
+      }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setUpdateState({ kind: "error", msg });
+      setUpdatePhase("error");
+      setUpdateError(e instanceof Error ? e.message : String(e));
     }
   };
 
-  const handleDownload = async () => {
-    if (updateState.kind !== "result") return;
-    // Pick the platform-appropriate asset (macOS DMG for now).
-    const dmg = updateState.info.assets.find(
-      (a) => a.name.endsWith(".dmg") || a.name.endsWith(".zip"),
-    );
-    if (!dmg) {
-      setUpdateState({
-        kind: "error",
-        msg: "没找到适合当前平台的下载文件",
-      });
-      return;
-    }
-    setUpdateState({ ...updateState, downloading: true });
+  const handleInstall = async () => {
+    if (!updateObj) return;
+    setUpdatePhase("downloading");
+    setDownloadPct(0);
     try {
-      const dest = await downloadUpdate(dmg.browser_download_url, dmg.name);
-      setUpdateState({ ...updateState, downloading: false, downloadedTo: dest });
-      onToast(
-        "success",
-        `已下载到 ${dest.split("/").pop()} — 请把应用拖入 /Applications 替换旧版`,
-      );
+      await updateObj.downloadAndInstall((event: DownloadEvent) => {
+        if (event.event === "Started") {
+          const total = event.data.contentLength ?? 0;
+          setDownloadPct(total > 0 ? 1 : 0);
+        } else if (event.event === "Progress") {
+          // Tauri 2.0's Progress event reports chunk length only; we show
+          // a moving indeterminate indicator since we don't get cumulative
+          // bytes for free. Once Finished fires we'll snap to 100%.
+          setDownloadPct((p) => Math.min(95, Math.max(p + 3, 5)));
+        } else if (event.event === "Finished") {
+          setDownloadPct(100);
+        }
+      });
+      setUpdatePhase("ready");
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setUpdateState({ kind: "error", msg });
+      setUpdatePhase("error");
+      setUpdateError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleRestart = async () => {
+    try {
+      await relaunchApp();
+    } catch (e: unknown) {
+      setUpdatePhase("error");
+      setUpdateError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -255,32 +280,72 @@ export function SettingsModal({
           <div className="settings-section">
             <h3>更新</h3>
             <p className="hint">
-              从 GitHub Releases 检查新版。点击「下载」会保存到 ~/Downloads
-              并自动打开 DMG,把它拖进 /Applications 即可覆盖旧版。
+              一键从 GitHub Releases 拉新版,签名校验 + 自动安装 + 重启。
             </p>
 
             <div className="form-actions">
               <button
                 className="btn-secondary"
                 onClick={handleCheckUpdate}
-                disabled={updateState.kind === "checking"}
+                disabled={updatePhase === "checking" || updatePhase === "downloading"}
               >
                 <Icon name="refresh" size={14} />
-                {updateState.kind === "checking" ? "检查中..." : "检查更新"}
+                {updatePhase === "checking" ? "检查中..." : "检查更新"}
               </button>
+              {updateObj && updatePhase === "idle" && (
+                <button
+                  className="btn-primary"
+                  onClick={handleInstall}
+                  style={{ fontSize: 12 }}
+                >
+                  <Icon name="download" size={12} />
+                  下载并安装 v{updateObj.version}
+                </button>
+              )}
+              {updatePhase === "downloading" && (
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  下载中... {downloadPct > 0 ? `${downloadPct}%` : ""}
+                </span>
+              )}
+              {updatePhase === "ready" && (
+                <button
+                  className="btn-primary"
+                  onClick={handleRestart}
+                  style={{ fontSize: 12, background: "var(--success)" }}
+                >
+                  ✓ 已下载 — 重启应用
+                </button>
+              )}
+              {updatePhase === "uptodate" && (
+                <span style={{ fontSize: 12, color: "var(--success)" }}>
+                  ✓ 已是最新版本
+                </span>
+              )}
             </div>
 
-            {updateState.kind === "error" && (
+            {updatePhase === "error" && (
               <div className="test-result error">
-                ❌ 检查失败:{updateState.msg}
+                ❌ {updateError}
               </div>
             )}
 
-            {updateState.kind === "result" && (
-              <UpdateResultPanel
-                state={updateState}
-                onDownload={handleDownload}
-              />
+            {updateObj && updateObj.body && updatePhase === "idle" && (
+              <div
+                style={{
+                  fontSize: 11,
+                  lineHeight: 1.55,
+                  maxHeight: 120,
+                  overflowY: "auto",
+                  whiteSpace: "pre-wrap",
+                  background: "var(--bg-code)",
+                  padding: 8,
+                  borderRadius: 4,
+                  marginTop: 10,
+                  fontFamily: "var(--font-sans)",
+                }}
+              >
+                {updateObj.body}
+              </div>
             )}
           </div>
         </div>
@@ -290,96 +355,6 @@ export function SettingsModal({
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ============================================================
-// Update result sub-panel
-// ============================================================
-
-interface UpdateResultPanelProps {
-  state: Extract<
-    { kind: "result"; info: UpdateInfo; downloading: boolean; downloadedTo?: string },
-    { kind: "result" }
-  >;
-  onDownload: () => void;
-}
-
-function UpdateResultPanel({ state, onDownload }: UpdateResultPanelProps) {
-  const { info, downloading, downloadedTo } = state;
-  const hasUpdate = info.has_update;
-  return (
-    <div
-      className={`test-result ${hasUpdate ? "loading" : "success"}`}
-      style={{ marginTop: 14 }}
-    >
-      <div style={{ fontWeight: 600, marginBottom: 4 }}>
-        {hasUpdate
-          ? `🎉 发现新版本 v${info.latest_version}`
-          : `✅ 已是最新版本`}
-      </div>
-      <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 8 }}>
-        当前版本 v{info.current_version}
-        {info.published_at
-          ? `  ·  发布于 ${new Date(info.published_at).toLocaleDateString()}`
-          : ""}
-      </div>
-      {info.release_name && (
-        <div style={{ fontSize: 12, marginBottom: 6 }}>
-          <strong>{info.release_name}</strong>
-        </div>
-      )}
-      {info.release_notes && (
-        <div
-          style={{
-            fontSize: 11,
-            lineHeight: 1.55,
-            maxHeight: 120,
-            overflowY: "auto",
-            whiteSpace: "pre-wrap",
-            background: "var(--bg)",
-            padding: 8,
-            borderRadius: 4,
-            marginBottom: 8,
-            fontFamily: "var(--font-sans)",
-          }}
-        >
-          {info.release_notes}
-        </div>
-      )}
-      {hasUpdate && (
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button
-            className="btn-primary"
-            onClick={onDownload}
-            disabled={downloading || !!downloadedTo}
-            style={{ fontSize: 12 }}
-          >
-            <Icon name="download" size={12} />
-            {downloading
-              ? "下载中..."
-              : downloadedTo
-                ? "✓ 已下载"
-                : "下载并打开"}
-          </button>
-          <a
-            href={info.release_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ fontSize: 11, color: "var(--text-muted)" }}
-          >
-            在 GitHub 查看 →
-          </a>
-        </div>
-      )}
-      {downloadedTo && (
-        <div style={{ fontSize: 11, marginTop: 8, color: "var(--success)" }}>
-          ✓ 已保存到 <code>{downloadedTo}</code>
-          <br />
-          DMG 已自动挂载,把 VibeCoder.app 拖入 /Applications 替换旧版。
-        </div>
-      )}
     </div>
   );
 }

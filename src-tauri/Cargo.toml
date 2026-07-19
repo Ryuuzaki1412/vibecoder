@@ -1,6 +1,6 @@
 [package]
 name = "vibecoder"
-version = "1.14.0"
+version = "1.15.0"
 description = "VibeCoder — a minimal desktop inspiration tool: capture ideas, AI polish, custom prompt templates, one-click MVP generation"
 edition = "2021"
 rust-version = "1.77"
@@ -20,6 +20,8 @@ tauri-build = { version = "2.0", features = [] }
 tauri = { version = "2.0", features = [] }
 tauri-plugin-store = "2.0"
 tauri-plugin-dialog = "2.0"
+tauri-plugin-updater = "2.0"
+tauri-plugin-process = "2.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
