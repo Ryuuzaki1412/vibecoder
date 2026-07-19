@@ -242,13 +242,70 @@ export default function App() {
       doc.setTextColor(40, 35, 30);
       const lineH = 5.2;
 
-      const blocks = plainContent.split(/\n\s*\n/).filter((b) => b.trim());
-      for (const block of blocks) {
-        const lines = doc.splitTextToSize(block.trim(), maxW);
+      // Match inline image tokens: ![alt](data:image/...;base64,...)
+      // Group 2 = full data URL, group 3 = image format, group 1 = alt
+      const IMAGE_RE =
+        /!\[([^\]]*)\]\((data:image\/([a-z0-9+.-]+);base64,([A-Za-z0-9+/=]+))\)/g;
+
+      /** Render a text fragment, advancing `y` and creating new pages as needed. */
+      const renderText = (text: string) => {
+        const t = text.trim();
+        if (!t) return;
+        const lines = doc.splitTextToSize(t, maxW);
         for (const line of lines) {
           ensureSpace(lineH);
           doc.text(line, margin, y + lineH - 1);
           y += lineH;
+        }
+      };
+
+      /** Render an image at the current y, scaled to fit page width,
+       *  max height 90mm. Falls back to text if jsPDF can't decode it. */
+      const renderImage = (dataUrl: string, format: string, alt: string) => {
+        try {
+          const props = doc.getImageProperties(dataUrl);
+          const maxImgH = 90; // mm
+          const ratio = Math.min(maxW / props.width, maxImgH / props.height, 1);
+          const w = props.width * ratio;
+          const h = props.height * ratio;
+          ensureSpace(h + 4);
+          doc.addImage(dataUrl, format.toUpperCase(), margin, y, w, h);
+          y += h + 4;
+          if (alt) {
+            // Optional caption
+            doc.setFontSize(9);
+            doc.setTextColor(120, 110, 95);
+            const captionLines = doc.splitTextToSize(alt, maxW);
+            for (const line of captionLines) {
+              ensureSpace(lineH - 1);
+              doc.text(line, margin, y + (lineH - 1) - 1);
+              y += lineH - 1;
+            }
+            doc.setFontSize(11);
+            doc.setTextColor(40, 35, 30);
+          }
+          y += 4;
+        } catch (e) {
+          // Fallback for unsupported / corrupt image
+          renderText(`[图片: ${alt || "image"}]`);
+        }
+      };
+
+      const blocks = plainContent.split(/\n\s*\n/).filter((b) => b.trim());
+      for (const block of blocks) {
+        // Slice each block into alternating text / image segments
+        let lastIdx = 0;
+        let m: RegExpExecArray | null;
+        IMAGE_RE.lastIndex = 0;
+        while ((m = IMAGE_RE.exec(block)) !== null) {
+          if (m.index > lastIdx) {
+            renderText(block.slice(lastIdx, m.index));
+          }
+          renderImage(m[2], m[3], m[1]);
+          lastIdx = m.index + m[0].length;
+        }
+        if (lastIdx < block.length) {
+          renderText(block.slice(lastIdx));
         }
         y += 3; // paragraph gap
       }
