@@ -927,36 +927,74 @@ html.font-mono .mvp-content {
 }
 
 /* ============================================================
-   Markdown source editor (v2.2 — textarea, ref-driven, no per-key
-   React reconciliation; preview rendered on toggle)
+   Markdown source editor (v1.16 — contentEditable with image chips)
    ============================================================ */
-.editor-textarea {
+.editor-source {
   flex: 1;
-  font-family: var(--editor-font, var(--font-mono));
-  font-size: 15px;
-  line-height: 1.75;
+  font-family: var(--editor-font, var(--font-serif));
+  font-size: 16px;
+  line-height: 1.7;
   color: var(--text);
   background: transparent;
   border: none;
   outline: none;
-  resize: none;
   padding: 4px 0 12px;
   width: 100%;
   letter-spacing: 0.005em;
   overflow-y: auto;
-  white-space: pre-wrap;
   word-break: break-word;
+  white-space: pre-wrap;
   caret-color: var(--accent);
 }
-.editor-textarea::placeholder {
+.editor-source:empty::before {
+  content: attr(data-placeholder);
   color: var(--text-subtle);
   font-style: italic;
   white-space: pre-wrap;
+  pointer-events: none;
 }
-.editor-textarea::-webkit-scrollbar { width: 10px; }
-.editor-textarea::-webkit-scrollbar-thumb {
+.editor-source::-webkit-scrollbar { width: 10px; }
+.editor-source::-webkit-scrollbar-thumb {
   background: var(--border-strong);
   border-radius: 5px;
+}
+
+/* Inline image chip — replaces `![alt](data:image/...)` in the source
+   so the user sees a real image thumbnail, not raw base64. */
+.md-img-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: middle;
+  margin: 2px 4px;
+  padding: 6px 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-code);
+  max-width: 280px;
+  user-select: none;
+  -webkit-user-select: none;
+  position: relative;
+  top: 2px;
+}
+.md-img-chip .md-img-thumb {
+  display: block;
+  max-width: 100%;
+  max-height: 140px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.md-img-chip .md-img-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  text-align: center;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .editor-hint {

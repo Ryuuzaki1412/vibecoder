@@ -32,23 +32,86 @@ const POLISH_SYSTEM_PROMPT = `你是 VibeCoder 的「润色助手」。
 严格要求:
 - 严格保留原文的所有事实、观点、立场和数据,**不要新增、删减或改写用户的意思**
 - 只能修正错别字、语法、标点、用词、句式
-- 可以用 Markdown 优化排版(列表、加粗、标题层级),但不要新增原文没有的章节或小标题
+- **不要使用 Markdown 格式**(不要加粗、不要列表、不要标题、不要代码块),输出纯文本段落
 - **绝对不要**输出 MVP 方案、产品设计、技术栈、代码示例、目录、摘要、说明、前后缀
 - 直接输出润色后的正文,不要加任何额外内容、解释、引用或包装文字`;
 
 const PERSIST_DEBOUNCE_MS = 250;
 
 // ============================================================
-// NoteEditor — markdown source editor (PERF-FIXED v2)
+// contenteditable markdown source editor
 //
-// - Textarea is UNCONTROLLED: browser owns the value, React never
-//   re-renders on keystroke.
-// - Word count updates via direct DOM (a <span> ref), no React state.
-// - Preview is snapshotted on toggle (renderMarkdown runs once per
-//   open, not on every keystroke).
-// - Debounced commit (250ms) to the parent so App / Sidebar don't
-//   re-render while typing.
+// The editor is a contentEditable div. We render the markdown source
+// as plain text, EXCEPT `![alt](data:image/...)` tokens which we replace
+// with contenteditable=false "chips" that show the actual image
+// thumbnail + alt text. This way:
+//   - User sees the rendered image (not raw base64) in the editor
+//   - The underlying source is still pure markdown (round-trips cleanly)
+//   - The preview pane uses the same `renderMarkdown` for full rendering
 // ============================================================
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Convert markdown source to HTML for the contenteditable. Image
+ *  tokens become chip spans; other text is HTML-escaped; newlines
+ *  become <br>. */
+function markdownToEditorHtml(md: string): string {
+  let out = escapeHtml(md);
+  // Image: ![alt](url) — must match BEFORE the link regex (which
+  // also matches [..](..)). Only convert data: URLs to chips (those
+  // are the ones with the long base64 the user wants hidden). For
+  // http(s) URLs, just keep the markdown text — preview will render.
+  out = out.replace(
+    /!\[([^\]]*)\]\((data:image\/[a-z0-9+.-]+;base64,[A-Za-z0-9+/=]+)\)/g,
+    (_m, altEsc, srcEsc) =>
+      `<span class="md-img-chip" contenteditable="false" data-src="${srcEsc}">` +
+      `<img class="md-img-thumb" src="${srcEsc}" alt="${altEsc}" />` +
+      `<span class="md-img-meta">📷 ${altEsc || "image"}</span>` +
+      `</span>`,
+  );
+  out = out.replace(/\n/g, "<br>");
+  return out;
+}
+
+/** Walk the contenteditable DOM and reconstruct the markdown source. */
+function editorHtmlToMarkdown(root: HTMLElement): string {
+  let result = "";
+  const walk = (el: Node): void => {
+    if (el.nodeType === Node.TEXT_NODE) {
+      result += el.textContent;
+      return;
+    }
+    if (el.nodeType !== Node.ELEMENT_NODE) return;
+    const elem = el as HTMLElement;
+    const tag = elem.tagName.toLowerCase();
+    if (tag === "br") {
+      result += "\n";
+    } else if (tag === "div" || tag === "p") {
+      // Browsers may wrap blocks in <div> or <p>
+      for (const child of Array.from(elem.childNodes)) walk(child);
+      result += "\n";
+    } else if (
+      tag === "span" &&
+      elem.classList.contains("md-img-chip")
+    ) {
+      const src = elem.dataset.src || "";
+      const labelEl = elem.querySelector(".md-img-meta");
+      let alt = labelEl?.textContent || "image";
+      alt = alt.replace(/^📷\s*/, "").trim();
+      result += `![${alt}](${src})`;
+    } else {
+      for (const child of Array.from(elem.childNodes)) walk(child);
+    }
+  };
+  for (const child of Array.from(root.childNodes)) walk(child);
+  return result;
+}
 
 export function NoteEditor({
   note,
@@ -60,15 +123,24 @@ export function NoteEditor({
   onRequestOpenSettings,
   onToast,
 }: NoteEditorProps) {
-  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const wordCountRef = useRef<HTMLSpanElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isPolishing, setIsPolishing] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
-  const [previewHtml, setPreviewHtml] = useState<string>("");
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
 
+  /** Markdown source — the single source of truth for the note body. */
+  const [markdown, setMarkdown] = useState<string>(note.content || "");
+
+  /** Mirrors markdown for the duration of a single input cycle. Used by
+   *  the sync effect to decide whether the DOM is already up to date
+   *  (so we don't blow away the cursor position). */
+  const lastMarkdownRef = useRef<string>(note.content || "");
+
+  // Pick the user's polish-type template.
   const polishTemplate = useMemo(
     () => templates.find((t) => t.type === "polish"),
     [templates],
@@ -95,7 +167,6 @@ export function NoteEditor({
     }
   }, []);
 
-  // Flush on unmount so we never lose the last keystrokes.
   useEffect(() => {
     return () => {
       if (pendingTimer.current !== null) {
@@ -109,11 +180,15 @@ export function NoteEditor({
     };
   }, []);
 
-  // Switch note → flush old, sync title/content/title-height via ref
+  // Switch note → flush old, reset state, sync DOM
   useEffect(() => {
     flushPending();
-    const initialContent = note.content || "";
-    if (editorRef.current) editorRef.current.value = initialContent;
+    const initial = note.content || "";
+    setMarkdown(initial);
+    lastMarkdownRef.current = initial;
+    if (editorRef.current) {
+      editorRef.current.innerHTML = markdownToEditorHtml(initial);
+    }
     if (titleRef.current) {
       titleRef.current.value = note.title || "";
       titleRef.current.style.height = "auto";
@@ -121,15 +196,21 @@ export function NoteEditor({
         titleRef.current.scrollHeight + "px";
     }
     if (wordCountRef.current)
-      wordCountRef.current.textContent = `${initialContent.length} 字`;
+      wordCountRef.current.textContent = `${initial.length} 字`;
     setIsPreviewing(false);
-    setPreviewHtml("");
   }, [note.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ============================================================
-  // Handlers (all touch the DOM directly — no React state per keystroke)
-  // ============================================================
+  // Sync DOM when markdown state changes externally (polish, paste-as-markdown, etc.)
+  useEffect(() => {
+    if (!editorRef.current) return;
+    if (markdown === lastMarkdownRef.current) return;
+    editorRef.current.innerHTML = markdownToEditorHtml(markdown);
+    lastMarkdownRef.current = markdown;
+  }, [markdown]);
 
+  // ============================================================
+  // Handlers
+  // ============================================================
   const handleTitleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onChange({ title: e.currentTarget.value });
     const el = e.currentTarget;
@@ -151,96 +232,111 @@ export function NoteEditor({
     }, PERSIST_DEBOUNCE_MS);
   }, []);
 
-  const handleContentChange = (
-    e: React.ChangeEvent<HTMLTextAreaElement>,
-  ) => {
-    const val = e.currentTarget.value;
+  /** Update markdown state from the DOM and persist (debounced). */
+  const commitFromDom = useCallback(() => {
+    if (!editorRef.current) return;
+    const md = editorHtmlToMarkdown(editorRef.current);
+    if (md === lastMarkdownRef.current) return;
+    lastMarkdownRef.current = md;
+    setMarkdown(md);
     if (wordCountRef.current)
-      wordCountRef.current.textContent = `${val.length} 字`;
-    schedulePersist(val);
-  };
+      wordCountRef.current.textContent = `${md.length} 字`;
+    schedulePersist(md);
+  }, [schedulePersist]);
 
-  const togglePreview = () => {
-    if (isPreviewing) {
-      setIsPreviewing(false);
+  /** Insert a chip element at the current selection. */
+  const insertChipAtCursor = useCallback((dataUrl: string, name: string) => {
+    const el = editorRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    // If the selection is outside the editor, place at end
+    if (!el.contains(range.commonAncestorContainer)) {
+      el.focus();
+      const newRange = document.createRange();
+      newRange.selectNodeContents(el);
+      newRange.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+      insertChipAtCursor(dataUrl, name);
       return;
     }
-    const val = editorRef.current?.value ?? "";
-    setPreviewHtml(renderMarkdown(val));
-    setIsPreviewing(true);
-  };
 
-  const refreshPreviewIfOpen = () => {
-    if (!isPreviewing) return;
-    const val = editorRef.current?.value ?? "";
-    setPreviewHtml(renderMarkdown(val));
-  };
+    const chip = document.createElement("span");
+    chip.className = "md-img-chip";
+    chip.contentEditable = "false";
+    chip.dataset.src = dataUrl;
 
-  // ============================================================
-  // Image insertion — paste / drop / file-picker
-  // Inserts as `![alt](data:image/...;base64,...)` markdown.
-  // ============================================================
-  const fileInputRef = useRef<HTMLInputElement>(null);
+    const img = document.createElement("img");
+    img.className = "md-img-thumb";
+    img.src = dataUrl;
+    img.alt = name;
 
-  /** Insert a string at the current caret, or replace the current selection. */
-  const insertAtCursor = useCallback((text: string) => {
-    const ta = editorRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const before = ta.value.slice(0, start);
-    const after = ta.value.slice(end);
-    const newValue = before + text + after;
-    ta.value = newValue;
-    const cursor = start + text.length;
-    ta.focus();
-    ta.setSelectionRange(cursor, cursor);
-    // Reflect in word count + persist
-    if (wordCountRef.current)
-      wordCountRef.current.textContent = `${newValue.length} 字`;
-    schedulePersist(newValue);
-    // Refresh preview if open
-    if (isPreviewing) {
-      setPreviewHtml(renderMarkdown(newValue));
-    }
-  }, [isPreviewing, schedulePersist]);
+    const meta = document.createElement("span");
+    meta.className = "md-img-meta";
+    meta.textContent = `📷 ${name || "image"}`;
 
-  /** Convert File[] → markdown image tokens, joined with blank lines. */
-  const filesToImageMarkdown = useCallback(
-    async (files: File[]): Promise<string> => {
-      const dataUrls = await Promise.all(
-        files.map((f) => readImageAsCompressedDataUrl(f)),
-      );
-      return files
-        .map((f, i) => buildImgMarkdown(dataUrls[i], f.name))
-        .join("\n\n");
-    },
-    [],
-  );
+    chip.appendChild(img);
+    chip.appendChild(meta);
 
+    // Replace selection with chip + space
+    range.deleteContents();
+    const space = document.createTextNode("\u00A0");
+    range.insertNode(space);
+    range.insertNode(chip);
+
+    // Move cursor after the trailing space
+    const after = document.createRange();
+    after.setStartAfter(space);
+    after.setEndAfter(space);
+    sel.removeAllRanges();
+    sel.addRange(after);
+  }, []);
+
+  /** Handle pasted / dropped / picked image files. */
   const handleImageFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
-      const md = await filesToImageMarkdown(files);
-      // Surround with blank lines so the image sits as its own block in preview
-      insertAtCursor(`\n\n${md}\n\n`);
+      // Read in parallel and insert chips one by one
+      for (const f of files) {
+        const dataUrl = await readImageAsCompressedDataUrl(f);
+        insertChipAtCursor(dataUrl, f.name);
+      }
+      commitFromDom();
       onToast("success", `已插入 ${files.length} 张图片`);
     },
-    [filesToImageMarkdown, insertAtCursor, onToast],
+    [insertChipAtCursor, commitFromDom, onToast],
   );
 
   const handlePaste = async (
-    e: React.ClipboardEvent<HTMLTextAreaElement>,
+    e: React.ClipboardEvent<HTMLDivElement>,
   ) => {
     const images = filterImageFiles(e.clipboardData.files);
-    if (images.length === 0) return; // let text paste happen normally
-    e.preventDefault();
-    await handleImageFiles(images);
+    if (images.length > 0) {
+      e.preventDefault();
+      await handleImageFiles(images);
+      return;
+    }
+    // For HTML, strip to plain text (avoids rich-format paste noise)
+    const html = e.clipboardData.getData("text/html");
+    if (html) {
+      e.preventDefault();
+      const text = e.clipboardData.getData("text/plain");
+      document.execCommand("insertText", false, text);
+      return;
+    }
+    // Plain text: let default happen, then commit
+    // (no preventDefault — browser inserts as text)
   };
 
-  const handleDrop = async (
-    e: React.DragEvent<HTMLTextAreaElement>,
-  ) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (e.dataTransfer.types.includes("Files")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    }
+  };
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     const files = Array.from(e.dataTransfer.files);
     const images = filterImageFiles(files);
     if (images.length === 0) return;
@@ -248,24 +344,20 @@ export function NoteEditor({
     await handleImageFiles(images);
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
-    if (e.dataTransfer.types.includes("Files")) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
-    }
-  };
-
   const handleFilePick = async (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
-    e.target.value = ""; // reset so re-selecting the same file works
+    e.target.value = "";
     await handleImageFiles(files);
   };
 
+  const togglePreview = () => {
+    setIsPreviewing((v) => !v);
+  };
+
   const handlePolish = async () => {
-    const val = editorRef.current?.value ?? "";
-    if (!val.trim()) {
+    if (!markdown.trim()) {
       onToast("warning", "内容为空,先写点东西再润色");
       return;
     }
@@ -277,23 +369,22 @@ export function NoteEditor({
     setIsPolishing(true);
     try {
       const userPrompt = polishTemplate
-        ? polishTemplate.content.replace(/\{\{content\}\}/g, val)
-        : val;
+        ? polishTemplate.content.replace(/\{\{content\}\}/g, markdown)
+        : markdown;
       const polished = await callAI(config, POLISH_SYSTEM_PROMPT, userPrompt);
-      // Strip accidental markdown code fences the model might emit
       const cleaned = polished
         .replace(/^```[a-z]*\n?/i, "")
         .replace(/```\s*$/, "")
         .trim();
+      // Update both state and DOM
+      setMarkdown(cleaned);
+      lastMarkdownRef.current = cleaned;
       if (editorRef.current) {
-        editorRef.current.value = cleaned;
-        editorRef.current.focus();
-        editorRef.current.setSelectionRange(cleaned.length, cleaned.length);
+        editorRef.current.innerHTML = markdownToEditorHtml(cleaned);
       }
       if (wordCountRef.current)
         wordCountRef.current.textContent = `${cleaned.length} 字`;
-      refreshPreviewIfOpen();
-      // Commit immediately (no debounce for AI-rewritten content)
+      // Commit immediately (AI rewrite bypasses debounce)
       flushPending();
       pendingValue.current = cleaned;
       onChangeRef.current({ content: cleaned });
@@ -307,6 +398,12 @@ export function NoteEditor({
     }
   };
 
+  // Live preview (recomputed on every markdown change while open)
+  const previewHtml = useMemo(
+    () => (isPreviewing ? renderMarkdown(markdown) : ""),
+    [isPreviewing, markdown],
+  );
+
   return (
     <div className="editor">
       {/* Title + status row */}
@@ -315,7 +412,7 @@ export function NoteEditor({
           ref={titleRef}
           className="editor-title"
           rows={1}
-          defaultValue={note.title}
+          value={note.title}
           placeholder="给这个想法起个名字..."
           onChange={handleTitleChange}
         />
@@ -353,19 +450,19 @@ export function NoteEditor({
         </div>
       </div>
 
-      {/* Action bar (AI + meta) */}
+      {/* Action bar */}
       <div className="editor-meta-bar">
         <div className="editor-meta-row">
           <span>更新于 {formatTime(note.updatedAt)}</span>
           <span>·</span>
           <span ref={wordCountRef}>{(note.content || "").length} 字</span>
-          <span className="editor-hint">· 支持 Markdown</span>
+          <span className="editor-hint">· 支持 Markdown · 粘贴/拖入图片直接预览</span>
         </div>
         <div className="editor-actions">
           <button
             className="btn-secondary"
             onClick={() => fileInputRef.current?.click()}
-            title="插入图片(也支持直接粘贴 / 拖入)"
+            title="插入图片(也支持粘贴 / 拖入)"
           >
             🖼 图片
           </button>
@@ -413,31 +510,20 @@ export function NoteEditor({
             dangerouslySetInnerHTML={{ __html: previewHtml }}
           />
         ) : (
-          <textarea
+          <div
             ref={editorRef}
-            className="editor-textarea"
-            defaultValue={note.content || ""}
-            onChange={handleContentChange}
+            className="editor-source"
+            contentEditable
+            suppressContentEditableWarning
+            spellCheck={false}
+            onInput={commitFromDom}
             onPaste={handlePaste}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
-            spellCheck={false}
-            placeholder={
-              "随便写 — 潦草、碎片、念头都可以。\n\n" +
-              "支持 Markdown:\n" +
-              "**加粗**  *斜体*  `行内代码`  ~~删除线~~\n" +
-              "# 标题  ## 二级标题  ### 三级标题\n" +
-              "- 无序列表 / 1. 有序列表(可嵌套缩进)\n" +
-              "> 引用\n" +
-              "```代码块```\n" +
-              "--- 分隔线\n" +
-              "[链接](url)  ![图片](粘贴 / 拖入 / 点 🖼 按钮)"
-            }
           />
         )}
       </div>
 
-      {/* Hidden file input for the "🖼 图片" toolbar button */}
       <input
         ref={fileInputRef}
         type="file"
@@ -447,7 +533,7 @@ export function NoteEditor({
         onChange={handleFilePick}
       />
 
-      {/* MVP section — still rendered as markdown (AI-generated) */}
+      {/* MVP section */}
       {note.mvp && (
         <div className="mvp-section">
           <div className="mvp-header">
