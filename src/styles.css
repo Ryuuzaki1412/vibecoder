@@ -1598,6 +1598,15 @@ html.font-mono .mvp-content {
   border: none;
   border-top: 1px dashed var(--border-strong);
 }
+.md img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 10px 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(40, 30, 20, 0.08);
+}
 
 /* ============================================================
    Responsive

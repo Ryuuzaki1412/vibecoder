@@ -1,6 +1,6 @@
 [package]
 name = "vibecoder"
-version = "1.13.0"
+version = "1.14.0"
 description = "VibeCoder — a minimal desktop inspiration tool: capture ideas, AI polish, custom prompt templates, one-click MVP generation"
 edition = "2021"
 rust-version = "1.77"

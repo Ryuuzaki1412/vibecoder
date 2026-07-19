@@ -25,6 +25,13 @@ function renderInline(s: string): string {
 
   out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, "$1<em>$2</em>");
+  // Image: ![alt](url) — must run BEFORE the link regex (which matches [..](..))
+  out = out.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, (_m, alt, url) => {
+    // Allow data: and http(s): and asset: and protocol-relative paths.
+    const safe = /^(data:image\/|https?:|asset:|\/)/i.test(url) ? url : "";
+    if (!safe) return _m;
+    return `<img src="${safe}" alt="${alt}" />`;
+  });
   out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, t, u) => {
     const safeUrl = /^(https?:|mailto:|#|\/)/i.test(u) ? u : "#";
     return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${t}</a>`;

@@ -6,6 +6,11 @@ import { StatusIndicator } from "./StatusBadge";
 import { renderMarkdown } from "../lib/markdown";
 import { callAI } from "../lib/tauri";
 import { formatTime } from "../lib/storage";
+import {
+  buildImgMarkdown,
+  filterImageFiles,
+  readImageAsCompressedDataUrl,
+} from "../lib/image";
 
 interface NoteEditorProps {
   note: Note;
@@ -171,6 +176,93 @@ export function NoteEditor({
     setPreviewHtml(renderMarkdown(val));
   };
 
+  // ============================================================
+  // Image insertion — paste / drop / file-picker
+  // Inserts as `![alt](data:image/...;base64,...)` markdown.
+  // ============================================================
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /** Insert a string at the current caret, or replace the current selection. */
+  const insertAtCursor = useCallback((text: string) => {
+    const ta = editorRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const before = ta.value.slice(0, start);
+    const after = ta.value.slice(end);
+    const newValue = before + text + after;
+    ta.value = newValue;
+    const cursor = start + text.length;
+    ta.focus();
+    ta.setSelectionRange(cursor, cursor);
+    // Reflect in word count + persist
+    if (wordCountRef.current)
+      wordCountRef.current.textContent = `${newValue.length} 字`;
+    schedulePersist(newValue);
+    // Refresh preview if open
+    if (isPreviewing) {
+      setPreviewHtml(renderMarkdown(newValue));
+    }
+  }, [isPreviewing, schedulePersist]);
+
+  /** Convert File[] → markdown image tokens, joined with blank lines. */
+  const filesToImageMarkdown = useCallback(
+    async (files: File[]): Promise<string> => {
+      const dataUrls = await Promise.all(
+        files.map((f) => readImageAsCompressedDataUrl(f)),
+      );
+      return files
+        .map((f, i) => buildImgMarkdown(dataUrls[i], f.name))
+        .join("\n\n");
+    },
+    [],
+  );
+
+  const handleImageFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+      const md = await filesToImageMarkdown(files);
+      // Surround with blank lines so the image sits as its own block in preview
+      insertAtCursor(`\n\n${md}\n\n`);
+      onToast("success", `已插入 ${files.length} 张图片`);
+    },
+    [filesToImageMarkdown, insertAtCursor, onToast],
+  );
+
+  const handlePaste = async (
+    e: React.ClipboardEvent<HTMLTextAreaElement>,
+  ) => {
+    const images = filterImageFiles(e.clipboardData.files);
+    if (images.length === 0) return; // let text paste happen normally
+    e.preventDefault();
+    await handleImageFiles(images);
+  };
+
+  const handleDrop = async (
+    e: React.DragEvent<HTMLTextAreaElement>,
+  ) => {
+    const files = Array.from(e.dataTransfer.files);
+    const images = filterImageFiles(files);
+    if (images.length === 0) return;
+    e.preventDefault();
+    await handleImageFiles(images);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    if (e.dataTransfer.types.includes("Files")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    }
+  };
+
+  const handleFilePick = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = ""; // reset so re-selecting the same file works
+    await handleImageFiles(files);
+  };
+
   const handlePolish = async () => {
     const val = editorRef.current?.value ?? "";
     if (!val.trim()) {
@@ -272,6 +364,13 @@ export function NoteEditor({
         <div className="editor-actions">
           <button
             className="btn-secondary"
+            onClick={() => fileInputRef.current?.click()}
+            title="插入图片(也支持直接粘贴 / 拖入)"
+          >
+            🖼 图片
+          </button>
+          <button
+            className="btn-secondary"
             onClick={togglePreview}
             title={isPreviewing ? "切回编辑" : "预览(渲染 Markdown)"}
           >
@@ -319,6 +418,9 @@ export function NoteEditor({
             className="editor-textarea"
             defaultValue={note.content || ""}
             onChange={handleContentChange}
+            onPaste={handlePaste}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
             spellCheck={false}
             placeholder={
               "随便写 — 潦草、碎片、念头都可以。\n\n" +
@@ -329,11 +431,21 @@ export function NoteEditor({
               "> 引用\n" +
               "```代码块```\n" +
               "--- 分隔线\n" +
-              "[链接](url)"
+              "[链接](url)  ![图片](粘贴 / 拖入 / 点 🖼 按钮)"
             }
           />
         )}
       </div>
+
+      {/* Hidden file input for the "🖼 图片" toolbar button */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        style={{ display: "none" }}
+        onChange={handleFilePick}
+      />
 
       {/* MVP section — still rendered as markdown (AI-generated) */}
       {note.mvp && (

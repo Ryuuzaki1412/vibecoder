@@ -58,6 +58,17 @@ export function filterImageFiles(
   return out;
 }
 
+/** Build a Markdown image token: ![alt](dataUrl).
+ *  Alt is sanitised so the source stays valid Markdown. */
+export function buildImgMarkdown(dataUrl: string, alt: string): string {
+  const safeAlt = alt
+    .replace(/\[/g, "［")
+    .replace(/\]/g, "］")
+    .replace(/\n/g, " ")
+    .trim();
+  return `![${safeAlt || "image"}](${dataUrl})`;
+}
+
 /** Build an <img> tag for insertion into a contenteditable. */
 export function buildImgHtml(dataUrl: string, alt: string): string {
   const safeAlt = alt
