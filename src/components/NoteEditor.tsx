@@ -131,6 +131,7 @@ export function NoteEditor({
   const [isPolishing, setIsPolishing] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   /** Markdown source — the single source of truth for the note body. */
   const [markdown, setMarkdown] = useState<string>(note.content || "");
@@ -356,6 +357,29 @@ export function NoteEditor({
     setIsPreviewing((v) => !v);
   };
 
+  /** Click on a chip → open full-size preview. Clicks on text just
+   *  place the cursor normally. */
+  const handleEditorClick = (
+    e: React.MouseEvent<HTMLDivElement>,
+  ) => {
+    const target = e.target as HTMLElement;
+    const chip = target.closest(".md-img-chip") as HTMLElement | null;
+    if (chip && chip.dataset.src) {
+      e.preventDefault();
+      setLightboxSrc(chip.dataset.src);
+    }
+  };
+
+  // Close lightbox on Esc
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxSrc(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [lightboxSrc]);
+
   const handlePolish = async () => {
     if (!markdown.trim()) {
       onToast("warning", "内容为空,先写点东西再润色");
@@ -502,27 +526,34 @@ export function NoteEditor({
 
       <div className="editor-divider" />
 
-      {/* Content area */}
+      {/* Content area — both editor and preview are kept in the DOM and
+          toggled via CSS visibility. This preserves the editor's content
+          (and chip elements) across preview↔edit switches. */}
       <div className="editor-body">
-        {isPreviewing ? (
-          <div
-            className="md editor-preview"
-            dangerouslySetInnerHTML={{ __html: previewHtml }}
-          />
-        ) : (
-          <div
-            ref={editorRef}
-            className="editor-source"
-            contentEditable
-            suppressContentEditableWarning
-            spellCheck={false}
-            onInput={commitFromDom}
-            onPaste={handlePaste}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-          />
-        )}
+        <div
+          ref={editorRef}
+          className={`editor-source ${isPreviewing ? "is-hidden" : ""}`}
+          contentEditable
+          suppressContentEditableWarning
+          spellCheck={false}
+          onInput={commitFromDom}
+          onClick={handleEditorClick}
+          onPaste={handlePaste}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+        />
+        <div
+          className={`md editor-preview ${!isPreviewing ? "is-hidden" : ""}`}
+          dangerouslySetInnerHTML={{ __html: previewHtml }}
+        />
       </div>
+
+      {lightboxSrc && (
+        <ImageLightbox
+          src={lightboxSrc}
+          onClose={() => setLightboxSrc(null)}
+        />
+      )}
 
       <input
         ref={fileInputRef}
@@ -559,6 +590,41 @@ export function NoteEditor({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// ImageLightbox — full-size preview of a chip's image. Click
+// backdrop or press Esc to close.
+// ============================================================
+function ImageLightbox({
+  src,
+  onClose,
+}: {
+  src: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="lightbox-backdrop"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="lightbox-content"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          className="lightbox-close"
+          onClick={onClose}
+          title="关闭 (Esc)"
+        >
+          <Icon name="x" size={18} />
+        </button>
+        <img src={src} alt="" className="lightbox-img" />
+      </div>
     </div>
   );
 }
