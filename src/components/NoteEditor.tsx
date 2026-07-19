@@ -1,16 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Note, NoteStatus, AIConfig, PromptTemplate } from "../types";
 import { NOTE_STATUS_LABELS, NOTE_STATUS_ORDER } from "../types";
 import { Icon } from "./Icon";
 import { StatusIndicator } from "./StatusBadge";
-import { StickyFormatToolbar, FloatingBubble } from "./FormatToolbar";
 import { renderMarkdown } from "../lib/markdown";
 import { callAI } from "../lib/tauri";
 import { formatTime } from "../lib/storage";
-import {
-  filterImageFiles,
-  insertImagesAtCursor,
-} from "../lib/image";
 
 interface NoteEditorProps {
   note: Note;
@@ -26,7 +21,6 @@ interface NoteEditorProps {
   ) => void;
 }
 
-// Strengthened system prompt — fix for bug #3 (polish was leaking MVP / code).
 const POLISH_SYSTEM_PROMPT = `你是 VibeCoder 的「润色助手」。
 你的唯一职责是把用户给的文字改写得**更清晰、更通顺、更专业**,仅此而已。
 
@@ -37,16 +31,19 @@ const POLISH_SYSTEM_PROMPT = `你是 VibeCoder 的「润色助手」。
 - **绝对不要**输出 MVP 方案、产品设计、技术栈、代码示例、目录、摘要、说明、前后缀
 - 直接输出润色后的正文,不要加任何额外内容、解释、引用或包装文字`;
 
-// Strip HTML → plain text (for AI + status counting + preview)
-function htmlToText(html: string): string {
-  // Render to a detached element to get innerText (preserves line breaks
-  // between block-level elements). AI-polish output is stored as HTML
-  // (<p>, <br>, etc.) so we parse it; plain-text content without tags
-  // passes through unchanged.
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  return (tmp.innerText || "").trim();
-}
+const PERSIST_DEBOUNCE_MS = 250;
+
+// ============================================================
+// NoteEditor — markdown source editor (PERF-FIXED v2)
+//
+// - Textarea is UNCONTROLLED: browser owns the value, React never
+//   re-renders on keystroke.
+// - Word count updates via direct DOM (a <span> ref), no React state.
+// - Preview is snapshotted on toggle (renderMarkdown runs once per
+//   open, not on every keystroke).
+// - Debounced commit (250ms) to the parent so App / Sidebar don't
+//   re-render while typing.
+// ============================================================
 
 export function NoteEditor({
   note,
@@ -58,101 +55,125 @@ export function NoteEditor({
   onRequestOpenSettings,
   onToast,
 }: NoteEditorProps) {
-  const editorRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
+  const wordCountRef = useRef<HTMLSpanElement>(null);
+
   const [isPolishing, setIsPolishing] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState<string>("");
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
 
-  // Pick the user's polish-type template (first match). Falls back to none.
   const polishTemplate = useMemo(
     () => templates.find((t) => t.type === "polish"),
     [templates],
   );
 
-  // Fix bug #1: switching notes (including creating a new one) always
-  // starts in EDIT mode, not preview mode.
+  // ============================================================
+  // Persistence — debounced commit, latest-value-wins
+  // ============================================================
+  const pendingTimer = useRef<number | null>(null);
+  const pendingValue = useRef<string | null>(null);
+  const onChangeRef = useRef(onChange);
   useEffect(() => {
-    setIsPreviewing(false);
-  }, [note.id]);
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
-  // Sync editor content when:
-  //   - switching to a different note (note.id changed)
-  //   - returning from preview to edit (isPreviewing flipped false — the
-  //     contentEditable div was unmounted and remounted empty)
-  // Fixes bug #2.
-  useEffect(() => {
-    if (isPreviewing) return;
-    if (!editorRef.current) return;
-    if (editorRef.current.innerHTML !== note.content) {
-      editorRef.current.innerHTML = note.content || "";
+  const flushPending = useCallback(() => {
+    if (pendingTimer.current !== null) {
+      window.clearTimeout(pendingTimer.current);
+      pendingTimer.current = null;
     }
-  }, [note.id, isPreviewing]);
+    if (pendingValue.current !== null) {
+      onChangeRef.current({ content: pendingValue.current });
+      pendingValue.current = null;
+    }
+  }, []);
 
-  // Auto-grow title textarea
+  // Flush on unmount so we never lose the last keystrokes.
   useEffect(() => {
-    const el = titleRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = el.scrollHeight + "px";
-  }, [note.title]);
+    return () => {
+      if (pendingTimer.current !== null) {
+        window.clearTimeout(pendingTimer.current);
+        pendingTimer.current = null;
+      }
+      if (pendingValue.current !== null) {
+        onChangeRef.current({ content: pendingValue.current });
+        pendingValue.current = null;
+      }
+    };
+  }, []);
 
-  const plainText = htmlToText(note.content);
+  // Switch note → flush old, sync title/content/title-height via ref
+  useEffect(() => {
+    flushPending();
+    const initialContent = note.content || "";
+    if (editorRef.current) editorRef.current.value = initialContent;
+    if (titleRef.current) {
+      titleRef.current.value = note.title || "";
+      titleRef.current.style.height = "auto";
+      titleRef.current.style.height =
+        titleRef.current.scrollHeight + "px";
+    }
+    if (wordCountRef.current)
+      wordCountRef.current.textContent = `${initialContent.length} 字`;
+    setIsPreviewing(false);
+    setPreviewHtml("");
+  }, [note.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ============================================================
+  // Handlers (all touch the DOM directly — no React state per keystroke)
+  // ============================================================
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    onChange({ title: e.target.value });
+    onChange({ title: e.currentTarget.value });
+    const el = e.currentTarget;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
   };
 
-  const handleContentInput = () => {
-    const html = editorRef.current?.innerHTML ?? "";
-    onChange({ content: html });
+  const schedulePersist = useCallback((val: string) => {
+    pendingValue.current = val;
+    if (pendingTimer.current !== null) {
+      window.clearTimeout(pendingTimer.current);
+    }
+    pendingTimer.current = window.setTimeout(() => {
+      pendingTimer.current = null;
+      if (pendingValue.current !== null) {
+        onChangeRef.current({ content: pendingValue.current });
+        pendingValue.current = null;
+      }
+    }, PERSIST_DEBOUNCE_MS);
+  }, []);
+
+  const handleContentChange = (
+    e: React.ChangeEvent<HTMLTextAreaElement>,
+  ) => {
+    const val = e.currentTarget.value;
+    if (wordCountRef.current)
+      wordCountRef.current.textContent = `${val.length} 字`;
+    schedulePersist(val);
   };
 
-  // Paste handler — supports images (screenshots, copied images, files)
-  const handlePaste = async (e: React.ClipboardEvent<HTMLDivElement>) => {
-    const images = filterImageFiles(e.clipboardData.files);
-    if (images.length > 0) {
-      e.preventDefault();
-      e.currentTarget.focus();
-      await insertImagesAtCursor(images);
+  const togglePreview = () => {
+    if (isPreviewing) {
+      setIsPreviewing(false);
       return;
     }
-    // No images — fall back to plain text only (strip HTML formatting from paste)
-    e.preventDefault();
-    const text = e.clipboardData.getData("text/plain");
-    document.execCommand("insertText", false, text);
+    const val = editorRef.current?.value ?? "";
+    setPreviewHtml(renderMarkdown(val));
+    setIsPreviewing(true);
   };
 
-  // Drag & drop image support
-  const [isDragOver, setIsDragOver] = useState(false);
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    if (e.dataTransfer.types.includes("Files")) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "copy";
-      if (!isDragOver) setIsDragOver(true);
-    }
-  };
-
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    // Only react when leaving the editor for real (not entering a child)
-    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-      setIsDragOver(false);
-    }
-  };
-
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    setIsDragOver(false);
-    const images = filterImageFiles(e.dataTransfer.files);
-    if (images.length > 0) {
-      e.preventDefault();
-      e.currentTarget.focus();
-      await insertImagesAtCursor(images);
-    }
+  const refreshPreviewIfOpen = () => {
+    if (!isPreviewing) return;
+    const val = editorRef.current?.value ?? "";
+    setPreviewHtml(renderMarkdown(val));
   };
 
   const handlePolish = async () => {
-    if (!plainText) {
+    const val = editorRef.current?.value ?? "";
+    if (!val.trim()) {
       onToast("warning", "内容为空,先写点东西再润色");
       return;
     }
@@ -163,24 +184,28 @@ export function NoteEditor({
     }
     setIsPolishing(true);
     try {
-      // Use the user's "润色助手" template if defined (fix for bug #3 —
-      // previously the hardcoded prompt was used and the template was
-      // ignored). Falls back to plain text if no template.
       const userPrompt = polishTemplate
-        ? polishTemplate.content.replace(/\{\{content\}\}/g, plainText)
-        : plainText;
+        ? polishTemplate.content.replace(/\{\{content\}\}/g, val)
+        : val;
       const polished = await callAI(config, POLISH_SYSTEM_PROMPT, userPrompt);
-      // Wrap the polished result in paragraphs if it doesn't look like HTML already
-      const looksLikeHtml = /<[a-z][\s\S]*>/i.test(polished);
-      const html = looksLikeHtml
-        ? polished
-        : polished
-            .split(/\n\n+/)
-            .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
-            .join("");
-      onChange({ content: html });
-      // Apply to editor immediately
-      if (editorRef.current) editorRef.current.innerHTML = html;
+      // Strip accidental markdown code fences the model might emit
+      const cleaned = polished
+        .replace(/^```[a-z]*\n?/i, "")
+        .replace(/```\s*$/, "")
+        .trim();
+      if (editorRef.current) {
+        editorRef.current.value = cleaned;
+        editorRef.current.focus();
+        editorRef.current.setSelectionRange(cleaned.length, cleaned.length);
+      }
+      if (wordCountRef.current)
+        wordCountRef.current.textContent = `${cleaned.length} 字`;
+      refreshPreviewIfOpen();
+      // Commit immediately (no debounce for AI-rewritten content)
+      flushPending();
+      pendingValue.current = cleaned;
+      onChangeRef.current({ content: cleaned });
+      pendingValue.current = null;
       onToast("success", "润色完成 ✨");
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -190,7 +215,6 @@ export function NoteEditor({
     }
   };
 
-  const getEditor = () => editorRef.current;
   return (
     <div className="editor">
       {/* Title + status row */}
@@ -199,7 +223,7 @@ export function NoteEditor({
           ref={titleRef}
           className="editor-title"
           rows={1}
-          value={note.title}
+          defaultValue={note.title}
           placeholder="给这个想法起个名字..."
           onChange={handleTitleChange}
         />
@@ -227,7 +251,9 @@ export function NoteEditor({
                 >
                   <StatusIndicator status={s} />
                   <span>{NOTE_STATUS_LABELS[s]}</span>
-                  {s === note.status && <span className="status-check">✓</span>}
+                  {s === note.status && (
+                    <span className="status-check">✓</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -235,23 +261,19 @@ export function NoteEditor({
         </div>
       </div>
 
-      {/* Editor toolbar (sticky) */}
-      <div className="editor-toolbar-row">
-        <StickyFormatToolbar getEditor={getEditor} />
-      </div>
-
       {/* Action bar (AI + meta) */}
       <div className="editor-meta-bar">
         <div className="editor-meta-row">
           <span>更新于 {formatTime(note.updatedAt)}</span>
           <span>·</span>
-          <span>{plainText.length} 字</span>
+          <span ref={wordCountRef}>{(note.content || "").length} 字</span>
+          <span className="editor-hint">· 支持 Markdown</span>
         </div>
         <div className="editor-actions">
           <button
             className="btn-secondary"
-            onClick={() => setIsPreviewing((v) => !v)}
-            title={isPreviewing ? "切回编辑" : "预览模式"}
+            onClick={togglePreview}
+            title={isPreviewing ? "切回编辑" : "预览(渲染 Markdown)"}
           >
             <Icon name={isPreviewing ? "edit" : "eye"} size={14} />
             {isPreviewing ? "编辑" : "预览"}
@@ -259,12 +281,15 @@ export function NoteEditor({
           <button
             className="btn-primary"
             onClick={handlePolish}
-            disabled={isPolishing || !plainText}
+            disabled={isPolishing}
             title="AI 润色当前笔记"
           >
             {isPolishing ? (
               <>
-                <span className="icon-btn loading" style={{ width: 14, height: 14 }}>
+                <span
+                  className="icon-btn loading"
+                  style={{ width: 14, height: 14 }}
+                >
                   <Icon name="sparkles" size={14} />
                 </span>
                 润色中
@@ -286,38 +311,31 @@ export function NoteEditor({
         {isPreviewing ? (
           <div
             className="md editor-preview"
-            dangerouslySetInnerHTML={{
-              __html: renderMarkdown(plainText),
-            }}
+            dangerouslySetInnerHTML={{ __html: previewHtml }}
           />
         ) : (
-          <div
+          <textarea
             ref={editorRef}
-            className={`editor-rich ${isDragOver ? "drag-over" : ""}`}
-            contentEditable
-            suppressContentEditableWarning
-            onInput={handleContentInput}
-            onPaste={handlePaste}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            data-placeholder="随便写 — 潦草、碎片、念头都可以。&#10;&#10;工具栏可插入图片、加粗、颜色等..."
+            className="editor-textarea"
+            defaultValue={note.content || ""}
+            onChange={handleContentChange}
+            spellCheck={false}
+            placeholder={
+              "随便写 — 潦草、碎片、念头都可以。\n\n" +
+              "支持 Markdown:\n" +
+              "**加粗**  *斜体*  `行内代码`  ~~删除线~~\n" +
+              "# 标题  ## 二级标题  ### 三级标题\n" +
+              "- 无序列表 / 1. 有序列表(可嵌套缩进)\n" +
+              "> 引用\n" +
+              "```代码块```\n" +
+              "--- 分隔线\n" +
+              "[链接](url)"
+            }
           />
-        )}
-        {isDragOver && (
-          <div className="drop-overlay">
-            <div className="drop-overlay-card">
-              <Icon name="plus" size={28} />
-              <div>松开鼠标插入图片</div>
-            </div>
-          </div>
         )}
       </div>
 
-      {/* Floating bubble menu (positioned over selection) */}
-      <FloatingBubble getEditor={getEditor} />
-
-      {/* MVP section */}
+      {/* MVP section — still rendered as markdown (AI-generated) */}
       {note.mvp && (
         <div className="mvp-section">
           <div className="mvp-header">
@@ -345,12 +363,4 @@ export function NoteEditor({
       )}
     </div>
   );
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }

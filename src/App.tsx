@@ -102,10 +102,10 @@ export default function App() {
     config.provider === "ollama" ||
     config.provider === "lmstudio";
 
-  const handleCreate = () => {
+  const handleCreate = useCallback(() => {
     const note = createNote();
     setSelectedId(note.id);
-  };
+  }, [createNote]);
 
   const handleEditorChange = useCallback(
     (
@@ -119,21 +119,31 @@ export default function App() {
     [selectedId, updateNote],
   );
 
-  const handleStatusChange = (s: NoteStatus) => {
-    if (!selectedId) return;
-    setNoteStatus(selectedId, s);
-  };
+  const handleStatusChange = useCallback(
+    (s: NoteStatus) => {
+      if (!selectedId) return;
+      setNoteStatus(selectedId, s);
+    },
+    [selectedId, setNoteStatus],
+  );
 
   /** Cycle a note's status (used by sidebar click on status indicator) */
   const handleCycleStatus = useCallback(
     (id: string) => {
-      const n = notes.find((x) => x.id === id);
-      if (!n) return;
-      const idx = NOTE_STATUS_ORDER.indexOf(n.status);
-      const next = NOTE_STATUS_ORDER[(idx + 1) % NOTE_STATUS_ORDER.length];
-      setNoteStatus(id, next);
+      setNoteStatus(id, (cur) => {
+        const idx = NOTE_STATUS_ORDER.indexOf(cur);
+        return NOTE_STATUS_ORDER[(idx + 1) % NOTE_STATUS_ORDER.length];
+      });
     },
-    [notes, setNoteStatus],
+    [setNoteStatus],
+  );
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      deleteNote(id);
+      toast.success("已删除");
+    },
+    [deleteNote, toast],
   );
 
   const handleGenerateMVP = (mvp: string) => {
@@ -314,10 +324,7 @@ export default function App() {
           selectedId={selectedId}
           onSelect={setSelectedId}
           onCreate={handleCreate}
-          onDelete={(id) => {
-            deleteNote(id);
-            toast.success("已删除");
-          }}
+          onDelete={handleDelete}
           onCycleStatus={handleCycleStatus}
         />
 
@@ -432,15 +439,6 @@ export default function App() {
           onToast={(k, m) => toast[k === "warning" ? "warn" : k](m)}
         />
       )}
-
-      {/* Floating action button */}
-      <button
-        className="fab"
-        onClick={openGenerate}
-        title="生成 MVP 方案"
-      >
-        <Icon name="rocket" size={22} />
-      </button>
     </>
   );
 }

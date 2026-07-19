@@ -35,11 +35,32 @@ function write<T>(key: string, value: T): void {
 // ============================================================
 // Notes
 // ============================================================
+
+/** Strip legacy HTML content to plain text. Idempotent — plain text input
+ *  passes through unchanged (detected via absence of `<tag>` patterns). */
+export function htmlToPlainText(html: string): string {
+  if (!html) return "";
+  if (!/<[a-z][\s\S]*>/i.test(html)) return html;
+  if (typeof document === "undefined") return html;
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  tmp.querySelectorAll("br").forEach((b) =>
+    b.replaceWith(document.createTextNode("\n")),
+  );
+  tmp
+    .querySelectorAll("p, div, li, h1, h2, h3, h4, h5, h6, blockquote, pre, tr")
+    .forEach((el) => {
+      if (el.nextSibling) el.appendChild(document.createTextNode("\n"));
+    });
+  return (tmp.innerText || "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 export function loadNotes(): Note[] {
-  // Migrate old notes that don't have a status field
-  return read<Note[]>(KEYS.notes, []).map((n) => ({
+  const raw = read<Note[]>(KEYS.notes, []);
+  return raw.map((n) => ({
     ...n,
     status: n.status ?? "not_started",
+    content: htmlToPlainText(n.content ?? ""),
   }));
 }
 export function saveNotes(notes: Note[]): void {

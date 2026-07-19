@@ -163,7 +163,10 @@ export function renderMarkdown(src: string): string {
       continue;
     }
 
-    // Paragraph (collect until blank)
+    // Paragraph (collect until blank). Single newlines are preserved as
+    // <br> so source line breaks render visually (Notion/Typora style).
+    // Standard CommonMark joins soft breaks with space; we diverge to
+    // match user expectation that Enter creates a new line.
     const para: string[] = [line];
     i++;
     while (
@@ -174,7 +177,7 @@ export function renderMarkdown(src: string): string {
       para.push(lines[i]);
       i++;
     }
-    out.push(`<p>${renderInline(para.join(" "))}</p>`);
+    out.push(`<p>${para.map((l) => renderInline(l)).join("<br>")}</p>`);
   }
 
   return out.join("\n");

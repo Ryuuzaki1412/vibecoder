@@ -927,7 +927,46 @@ html.font-mono .mvp-content {
 }
 
 /* ============================================================
-   Rich content editable area (v1.3 — replaces editor-textarea)
+   Markdown source editor (v2.2 — textarea, ref-driven, no per-key
+   React reconciliation; preview rendered on toggle)
+   ============================================================ */
+.editor-textarea {
+  flex: 1;
+  font-family: var(--editor-font, var(--font-mono));
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 4px 0 12px;
+  width: 100%;
+  letter-spacing: 0.005em;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  caret-color: var(--accent);
+}
+.editor-textarea::placeholder {
+  color: var(--text-subtle);
+  font-style: italic;
+  white-space: pre-wrap;
+}
+.editor-textarea::-webkit-scrollbar { width: 10px; }
+.editor-textarea::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 5px;
+}
+
+.editor-hint {
+  color: var(--accent);
+  opacity: 0.7;
+  font-style: italic;
+}
+
+/* ============================================================
+   Rich content editable area (v1.3 — legacy, kept for backward-compat)
    ============================================================ */
 .editor-rich {
   flex: 1;

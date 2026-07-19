@@ -40,13 +40,18 @@ export function useNotes() {
     [],
   );
 
-  const setNoteStatus = useCallback((id: string, status: NoteStatus) => {
-    setNotes((prev) =>
-      prev.map((n) =>
-        n.id === id ? { ...n, status, updatedAt: nowSecs() } : n,
-      ),
-    );
-  }, []);
+  const setNoteStatus = useCallback(
+    (id: string, next: NoteStatus | ((prev: NoteStatus) => NoteStatus)) => {
+      setNotes((prev) =>
+        prev.map((n) => {
+          if (n.id !== id) return n;
+          const status = typeof next === "function" ? next(n.status) : next;
+          return { ...n, status, updatedAt: nowSecs() };
+        }),
+      );
+    },
+    [],
+  );
 
   const deleteNote = useCallback((id: string) => {
     setNotes((prev) => prev.filter((n) => n.id !== id));
