@@ -103,7 +103,7 @@ export function TemplatesModal({
                 value={draftContent}
                 onChange={(e) => setDraftContent(e.target.value)}
                 rows={14}
-                style={{ fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.55 }}
+                style={{ fontFamily: "var(--font-sans)", fontSize: 12, lineHeight: 1.55 }}
                 placeholder="请润色以下内容,保持原意,使表达更清晰:&#10;&#10;{{content}}"
               />
             </div>
@@ -142,7 +142,7 @@ export function TemplatesModal({
           >
             预设 3 个模板,你可以任意编辑、删除或新增。
             <br />
-            模板里用 <code style={{ fontFamily: "var(--font-mono)" }}>{"{{content}}"}</code> 标记用户笔记插入的位置。
+            模板里用 <code style={{ fontFamily: "var(--font-sans)" }}>{"{{content}}"}</code> 标记用户笔记插入的位置。
           </p>
 
           <div className="template-list">

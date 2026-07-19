@@ -428,8 +428,6 @@ export default function App() {
       {showSettings && (
         <SettingsModal
           config={config}
-          editorFont={ui.editorFont}
-          onChangeEditorFont={ui.setEditorFont}
           onChange={updateConfig}
           onReset={() => {
             resetConfig();

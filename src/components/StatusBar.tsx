@@ -64,7 +64,7 @@ export function StatusBar({
             fontSize: 11,
             color: "var(--text-muted)",
             boxShadow: "var(--shadow-paper)",
-            fontFamily: "var(--font-mono)",
+            fontFamily: "var(--font-sans)",
             zIndex: 100,
           }}
         >

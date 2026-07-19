@@ -72,7 +72,7 @@ export function Sidebar({
               color: "var(--text-subtle)",
               fontSize: 13,
               fontStyle: "italic",
-              fontFamily: "var(--font-serif)",
+              fontFamily: "var(--font-sans)",
             }}
           >
             {query ? "没有匹配的笔记" : "还没有任何笔记"}

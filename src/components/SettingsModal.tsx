@@ -9,13 +9,9 @@ import {
   type Update,
   type DownloadEvent,
 } from "../lib/tauri";
-import type { EditorFont } from "../lib/storage";
-import { EDITOR_FONT_OPTIONS } from "../lib/storage";
 
 interface SettingsModalProps {
   config: AIConfig;
-  editorFont: EditorFont;
-  onChangeEditorFont: (f: EditorFont) => void;
   onChange: (patch: Partial<AIConfig>) => void;
   onReset: () => void;
   onClose: () => void;
@@ -24,8 +20,6 @@ interface SettingsModalProps {
 
 export function SettingsModal({
   config,
-  editorFont,
-  onChangeEditorFont,
   onChange,
   onReset,
   onClose,
@@ -145,29 +139,6 @@ export function SettingsModal({
           </button>
         </div>
         <div className="modal-body">
-          {/* Appearance */}
-          <div className="settings-section">
-            <h3>外观</h3>
-            <p className="hint">编辑器正文字体。可随时切换。</p>
-            <div className="font-grid">
-              {EDITOR_FONT_OPTIONS.map((opt) => (
-                <button
-                  key={opt.id}
-                  className={`font-card font-${opt.id} ${editorFont === opt.id ? "active" : ""}`}
-                  onClick={() => onChangeEditorFont(opt.id)}
-                >
-                  <div className="font-sample">Aa</div>
-                  <div className="font-name">{opt.label}</div>
-                  {editorFont === opt.id && (
-                    <span className="font-check">
-                      <Icon name="check" size={12} />
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* AI */}
           <div className="settings-section">
             <h3>AI 提供方</h3>

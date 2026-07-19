@@ -147,17 +147,13 @@ export function saveAIConfig(cfg: AIConfig): void {
 // ============================================================
 // UI prefs (theme etc.)
 // ============================================================
-export type EditorFont =
-  | "default"   // Georgia / serif (current default)
-  | "songti"    // Chinese serif (Songti / Noto Serif CJK)
-  | "sans"      // System sans (PingFang / SF)
-  | "mono";     // Monospace
+// All text uses the system sans-serif (PingFang SC on macOS, system-ui
+// elsewhere). We keep the type for backward compat with stored prefs
+// (older values get migrated to "sans" on load).
+export type EditorFont = "sans";
 
 export const EDITOR_FONT_OPTIONS: { id: EditorFont; label: string; sample: string }[] = [
-  { id: "default", label: "衬线 (Georgia)", sample: "Aa  衬线" },
-  { id: "songti",  label: "宋体 (Songti)",  sample: "Aa  宋体" },
-  { id: "sans",    label: "无衬线 (System)", sample: "Aa  Sans" },
-  { id: "mono",    label: "等宽 (Mono)",    sample: "Aa  Mono" },
+  { id: "sans", label: "无衬线 (System)", sample: "Aa  Sans" },
 ];
 
 export interface UIPrefs {
@@ -167,11 +163,13 @@ export interface UIPrefs {
 }
 
 export function loadUIPrefs(): UIPrefs {
-  return read<UIPrefs>(KEYS.ui, {
+  const stored = read<UIPrefs>(KEYS.ui, {
     theme: "light",
     selectedNoteId: null,
-    editorFont: "default",
+    editorFont: "sans",
   });
+  // Migration: any old non-sans editorFont value is forced to sans
+  return { ...stored, editorFont: "sans" };
 }
 export function saveUIPrefs(prefs: UIPrefs): void {
   write(KEYS.ui, prefs);
