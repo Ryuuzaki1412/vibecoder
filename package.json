@@ -1,0 +1,39 @@
+{
+  "name": "vibecoder",
+  "version": "1.9.0",
+  "description": "VibeCoder — a minimal desktop inspiration tool: capture ideas, AI polish, custom prompt templates, one-click MVP generation",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:build:debug": "tauri build --debug",
+    "tauri:build:mac-universal": "tauri build --target universal-apple-darwin"
+  },
+  "dependencies": {
+    "@fontsource/noto-sans-sc": "^5.3.0",
+    "@tauri-apps/api": "^2.1.1",
+    "@tauri-apps/plugin-dialog": "^2.7.2",
+    "@tauri-apps/plugin-store": "^2.0.0",
+    "jspdf": "^4.2.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "wawoff2": "^2.0.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.1.0",
+    "@types/node": "^26.1.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.16",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

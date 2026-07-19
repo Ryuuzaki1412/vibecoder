@@ -1,0 +1,1570 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================================================
+   VibeCoder — Claude-inspired "literary salon" aesthetic
+   Warm parchment canvas, terracotta accents, serif headlines,
+   warm gray neutrals (every gray has a yellow-brown undertone).
+   =========================================================== */
+
+:root {
+  /* Claude canvas + accent */
+  --bg: #f5f4ed;             /* signature parchment */
+  --bg-elevated: #fdfcf7;    /* slightly lighter for cards */
+  --bg-sidebar: #ede9dd;     /* sidebars feel like book pages */
+  --bg-hover: #e6e0d0;
+  --bg-active: #f7decf;      /* terracotta-50 */
+  --bg-code: #f0ebde;
+
+  --text: #1a1a1a;
+  --text-muted: #5e5a51;
+  --text-subtle: #8a8478;
+  --text-inverse: #fafaf6;
+
+  --border: #e0dac9;
+  --border-strong: #cfc7af;
+
+  --accent: #c96442;          /* terracotta */
+  --accent-hover: #b1532f;
+  --accent-soft: #f7decf;
+  --accent-text: #8b3a1f;
+
+  --success: #5d7e5a;
+  --warning: #c89b3c;
+  --danger:  #b53333;
+  --info:    #3898ec;
+
+  --radius: 6px;
+  --radius-lg: 10px;
+
+  --titlebar-h: 48px;
+  --statusbar-h: 30px;
+  --sidebar-w: 290px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+    "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-serif: Georgia, "Times New Roman", Times, serif;
+  --font-mono: "SF Mono", Menlo, Monaco, Consolas, "Courier New", monospace;
+}
+
+.dark {
+  /* Warm dark — never cold. Same family of hues, inverted lightness. */
+  --bg: #1a1814;
+  --bg-elevated: #232019;
+  --bg-sidebar: #15130f;
+  --bg-hover: #2c2820;
+  --bg-active: #3a2a20;
+  --bg-code: #23201a;
+
+  --text: #ebe7dd;
+  --text-muted: #b8b2a3;
+  --text-subtle: #8a8478;
+  --text-inverse: #1a1814;
+
+  --border: #2f2a22;
+  --border-strong: #463f33;
+
+  --accent: #d97757;
+  --accent-hover: #e08a6a;
+  --accent-soft: #3a2a20;
+  --accent-text: #e6a47e;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  display: flex;
+  flex-direction: column;
+}
+
+#root { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+/* ============================================================
+   Claude's signature: serif headlines feel like book titles
+   ============================================================ */
+.font-serif { font-family: var(--font-serif); }
+h1, h2, h3 { font-family: var(--font-serif); font-weight: 500; letter-spacing: -0.005em; }
+h1 { font-size: 26px; line-height: 1.15; }
+h2 { font-size: 20px; line-height: 1.20; }
+
+/* ============================================================
+   Scrollbar — warm and quiet
+   ============================================================ */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 5px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-subtle); }
+
+/* ============================================================
+   Sidebar — note item with status indicator (v1.3)
+   ============================================================ */
+.note-item-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.note-item-title { flex: 1; min-width: 0; }
+.note-item-status {
+  cursor: pointer;
+  transition: transform .12s;
+  padding: 2px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.note-item-status:hover {
+  transform: scale(1.18);
+  background: var(--bg-active);
+}
+
+.sidebar-status-bar {
+  display: flex;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  justify-content: space-around;
+  color: var(--text-muted);
+}
+.status-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.status-stat[data-status="completed"]   { color: var(--success); }
+.status-stat[data-status="in_progress"] { color: var(--accent); }
+.status-stat[data-status="not_started"] { color: var(--text-subtle); }
+
+/* ============================================================
+   Format toolbar (sticky + floating bubble)
+   ============================================================ */
+.format-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  position: relative;
+  font-size: 14px;
+}
+.ft-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: var(--text);
+  cursor: pointer;
+  font-family: var(--font-serif);
+  transition: background .12s, color .12s;
+  position: relative;
+}
+.ft-btn:hover { background: var(--bg-hover); }
+.ft-btn.active { background: var(--bg-active); color: var(--accent); }
+.ft-btn strong, .ft-btn em, .ft-btn u, .ft-btn s { font-size: 14px; }
+.ft-italic { font-style: italic; }
+.ft-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.ft-block-label { font-size: 13px; }
+.ft-chevron { font-size: 9px; opacity: 0.65; margin-left: 2px; }
+.ft-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.ft-color-underline {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 1px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.ft-popover-anchor { position: relative; display: inline-block; }
+.ft-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(40, 30, 20, 0.18);
+  padding: 8px;
+  z-index: 200;
+  min-width: 180px;
+  animation: fadeIn 120ms ease-out;
+}
+.ft-popover-block { min-width: 160px; }
+.ft-popover-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  padding: 0 4px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.ft-block-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background .12s;
+}
+.ft-block-item:hover { background: var(--bg-hover); }
+.ft-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+.ft-swatch {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: transform .12s, border-color .12s;
+}
+.ft-swatch:hover { transform: scale(1.1); border-color: var(--accent); }
+.ft-swatch-bg { border-color: var(--border); }
+
+/* Floating bubble (Notion inline menu) */
+.bubble-menu {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(40, 30, 20, 0.20);
+  z-index: 250;
+  font-size: 13px;
+  animation: slideUpFade 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.bubble-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+  font-family: var(--font-serif);
+  transition: background .12s;
+}
+.bubble-btn:hover { background: var(--bg-hover); }
+.bubble-mono { font-family: var(--font-mono); font-size: 11px; }
+.bubble-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.bubble-color-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(40, 30, 20, 0.15);
+  z-index: 300;
+}
+.bubble-color-chip {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.bubble-color-chip:hover { transform: scale(1.1); }
+
+@keyframes slideUpFade {
+  from { transform: translateX(-50%) translateY(-4px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);    opacity: 1; }
+}
+
+/* ============================================================
+   Editor font selection (v1.4)
+   The user picks a font from Settings →  mounted on <html> via class.
+   ============================================================ */
+.editor {
+  font-family: var(--editor-font, var(--font-serif));
+}
+
+html.font-default .editor,
+html.font-default .editor-title,
+html.font-default .editor-preview,
+html.font-default .mvp-content {
+  --editor-font: Georgia, "Times New Roman", "Songti SC", "STSong", serif;
+  font-family: var(--editor-font);
+}
+html.font-songti .editor,
+html.font-songti .editor-title,
+html.font-songti .editor-preview,
+html.font-songti .mvp-content {
+  --editor-font: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC",
+    Georgia, serif;
+  font-family: var(--editor-font);
+}
+html.font-sans .editor,
+html.font-sans .editor-title,
+html.font-sans .editor-preview,
+html.font-sans .mvp-content {
+  --editor-font: -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  font-family: var(--editor-font);
+}
+html.font-mono .editor,
+html.font-mono .editor-title,
+html.font-mono .editor-preview,
+html.font-mono .mvp-content {
+  --editor-font: "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  font-family: var(--editor-font);
+}
+
+/* ============================================================
+   Font picker cards (in Settings)
+   ============================================================ */
+.font-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.font-card {
+  position: relative;
+  padding: 14px 12px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .12s, background .12s;
+}
+.font-card:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+.font-card.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.font-sample {
+  font-size: 24px;
+  line-height: 1;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--text);
+}
+.font-card.font-songti .font-sample {
+  font-family: "Songti SC", "Noto Serif CJK SC", serif;
+}
+.font-card.font-sans .font-sample {
+  font-family: -apple-system, "PingFang SC", sans-serif;
+  font-weight: 600;
+}
+.font-card.font-mono .font-sample {
+  font-family: "SF Mono", Menlo, monospace;
+}
+.font-name {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.font-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================================================
+   Print / Export PDF (v1.4)
+   Hides UI chrome, prints only the note (title + content + MVP).
+   Triggered by window.print() from the "导出 PDF" button.
+   ============================================================ */
+@media print {
+  /* Reset all backgrounds & use serif for print readability */
+  body, html {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .titlebar,
+  .sidebar,
+  .statusbar,
+  .status-indicator,
+  .toast-container,
+  .format-toolbar,
+  .editor-meta-bar,
+  .editor-toolbar-row,
+  .editor-divider,
+  .editor-title-row,
+  .editor-rich,
+  .editor-preview,
+  .editor-toolbar,
+  .editor-actions,
+  .bubble-menu,
+  .modal-backdrop,
+  .modal,
+  .fab,
+  .drop-overlay,
+  button,
+  [class*="icon-btn"],
+  [class*="brand-"],
+  [class*="btn-"] {
+    display: none !important;
+  }
+  /* Only the print area shows */
+  .editor {
+    background: #fff !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+  .editor-body {
+    padding: 24mm 18mm !important;
+  }
+  /* Show printable header */
+  .print-only {
+    display: block !important;
+  }
+  /* MVP section styling for print */
+  .mvp-section {
+    background: #fff !important;
+    border: none !important;
+    border-top: 1px solid #ccc !important;
+    padding: 16mm 0 0 !important;
+    page-break-before: always;
+  }
+  .mvp-title,
+  .mvp-content {
+    color: #000 !important;
+  }
+  /* Force links to show URL */
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 11px;
+    color: #555;
+  }
+  /* Page setup */
+  @page {
+    margin: 0;
+    size: A4;
+  }
+  /* Prevent images from breaking pages badly */
+  img {
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+  h1, h2, h3 { page-break-after: avoid; }
+}
+
+/* Hidden by default */
+.print-only { display: none; }
+
+/* Print-only header — appears only in @media print */
+.print-header h1 {
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 28pt;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  margin: 0 0 6pt;
+  line-height: 1.2;
+  color: #000;
+}
+.print-meta {
+  font-size: 9pt;
+  color: #666;
+  margin-bottom: 18pt;
+  padding-bottom: 6pt;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  gap: 8pt;
+}
+.print-body {
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 12pt;
+  line-height: 1.6;
+  color: #000;
+}
+.print-body h1, .print-body h2, .print-body h3 {
+  font-weight: 500;
+  margin: 14pt 0 6pt;
+}
+
+/* ============================================================
+   Title bar
+   ============================================================ */
+.titlebar {
+  height: var(--titlebar-h);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px 0 18px;
+  user-select: none;
+  flex-shrink: 0;
+}
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(201, 100, 66, 0.25);
+}
+.brand-mark svg {
+  display: block;
+}
+.brand-name {
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+.brand-tag {
+  font-size: 11px;
+  color: var(--text-subtle);
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-code);
+  font-family: var(--font-mono);
+}
+
+.titlebar-right { display: flex; align-items: center; gap: 6px; }
+.titlebar-divider { width: 1px; height: 18px; background: var(--border); margin: 0 6px; }
+
+/* ============================================================
+   Icon buttons
+   ============================================================ */
+.icon-btn {
+  width: 32px; height: 32px;
+  border: none; background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s, transform .12s;
+}
+.icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+.icon-btn:active { transform: scale(0.94); }
+.icon-btn.loading { animation: spin 1s linear infinite; color: var(--accent); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   Main layout
+   ============================================================ */
+.layout {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ============================================================
+   Sidebar — feels like the index of a leather-bound book
+   ============================================================ */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-head {
+  padding: 14px 16px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sidebar-title {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.005em;
+}
+.sidebar-count {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 1px 7px;
+  background: var(--bg-code);
+  color: var(--text-muted);
+  border-radius: 8px;
+}
+
+.sidebar-search {
+  padding: 4px 12px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+.sidebar-search input {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.sidebar-search input::placeholder { color: var(--text-subtle); font-style: italic; }
+.sidebar-search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(201, 100, 66, 0.12);
+}
+
+.note-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px 16px;
+}
+
+.note-item {
+  position: relative;
+  padding: 11px 12px;
+  margin: 2px 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background .12s, transform .12s;
+  border-left: 3px solid transparent;
+}
+.note-item:hover { background: var(--bg-hover); }
+.note-item.active {
+  background: var(--bg-active);
+  border-left-color: var(--accent);
+}
+.note-item-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--font-serif);
+  letter-spacing: -0.003em;
+}
+.note-item-snippet {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.note-item-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+}
+.note-item-meta .mvp-tag {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+/* ============================================================
+   Content — note editor
+   ============================================================ */
+.content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  min-width: 0;
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+}
+.empty-card {
+  text-align: center;
+  color: var(--text-muted);
+  max-width: 460px;
+}
+.empty-ornament {
+  width: 64px; height: 64px;
+  margin: 0 auto 20px;
+  color: var(--accent);
+  opacity: 0.5;
+}
+.empty h2 {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
+}
+.empty p { font-size: 14px; line-height: 1.65; margin-bottom: 6px; }
+.empty .hint { margin-top: 18px; font-size: 12px; color: var(--text-subtle); }
+.empty .hint strong { color: var(--accent); font-weight: 500; }
+
+/* ============================================================
+   Note editor (the literary salon — the heart of the app)
+   ============================================================ */
+.editor {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-width: 920px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 16px 40px 16px;
+  position: relative;
+}
+
+.editor-title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+.editor-title {
+  flex: 1;
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  padding: 8px 0 12px;
+  resize: none;
+  line-height: 1.18;
+  font-family: var(--font-serif);
+}
+.editor-title::placeholder { color: var(--text-subtle); font-style: italic; }
+
+/* Status picker next to title */
+.status-picker { position: relative; }
+.status-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background .12s, border-color .12s;
+}
+.status-picker-trigger:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+.status-picker-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(40, 30, 20, 0.18);
+  padding: 4px;
+  min-width: 160px;
+  z-index: 200;
+  animation: fadeIn 120ms ease-out;
+}
+.status-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+}
+.status-picker-item:hover { background: var(--bg-hover); }
+.status-picker-item.active { background: var(--bg-active); }
+.status-check {
+  margin-left: auto;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Format toolbar row */
+.editor-toolbar-row {
+  margin-bottom: 10px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+/* Action bar — AI actions + meta */
+.editor-meta-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+  gap: 12px;
+}
+.editor-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+}
+.editor-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+.editor-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0 14px;
+  flex-shrink: 0;
+}
+
+.editor-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ============================================================
+   Rich content editable area (v1.3 — replaces editor-textarea)
+   ============================================================ */
+.editor-rich {
+  flex: 1;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--text);
+  outline: none;
+  padding: 4px 0 12px;
+  overflow-y: auto;
+  letter-spacing: 0.005em;
+  /* Strip browser default styles */
+}
+.editor-rich:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-subtle);
+  font-style: italic;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+
+/* Drag-over highlight (when files are being dragged in) */
+.editor-rich.drag-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: -2px;
+  background: var(--accent-soft);
+  transition: background .15s;
+}
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(40, 30, 20, 0.05);
+  pointer-events: none;
+  border-radius: var(--radius);
+  animation: fadeIn 120ms ease-out;
+}
+.drop-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 36px;
+  background: var(--bg-elevated);
+  border: 2px dashed var(--accent);
+  border-radius: 14px;
+  color: var(--accent);
+  font-family: var(--font-serif);
+  font-size: 15px;
+  box-shadow: 0 8px 24px rgba(201, 100, 66, 0.18);
+}
+.editor-rich h1, .editor-rich h2, .editor-rich h3 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  margin: 16px 0 8px;
+  line-height: 1.25;
+}
+.editor-rich h1 { font-size: 22px; }
+.editor-rich h2 { font-size: 18px; color: var(--accent); }
+.editor-rich h3 { font-size: 16px; }
+.editor-rich p { margin: 6px 0; }
+.editor-rich ul, .editor-rich ol { padding-left: 24px; margin: 6px 0; }
+.editor-rich li { margin: 2px 0; }
+.editor-rich blockquote {
+  margin: 8px 0;
+  padding: 6px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-style: italic;
+}
+.editor-rich code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--bg-code);
+  color: var(--accent-text);
+}
+.editor-rich pre {
+  margin: 10px 0;
+  padding: 12px 14px;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.editor-rich pre code { background: transparent; padding: 0; }
+.editor-rich img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 10px 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-paper);
+}
+.editor-rich a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: rgba(201, 100, 66, 0.4);
+}
+.editor-rich a:hover { text-decoration-color: var(--accent); }
+.editor-rich u { text-decoration-thickness: 1.5px; text-underline-offset: 2px; }
+
+/* Editor preview (when toggled to preview mode — uses markdown render) */
+.editor-preview {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--text);
+  padding: 4px 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* MVP section — generated output */
+.mvp-section {
+  margin-top: 24px;
+  padding: 18px 22px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-lg);
+  flex-shrink: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.mvp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.mvp-title {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mvp-content {
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ============================================================
+   Buttons — primary is terracotta, secondary is paper
+   ============================================================ */
+.btn-primary {
+  padding: 7px 16px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background .15s, transform .12s;
+}
+.btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn-primary:active:not(:disabled) { transform: translateY(1px); }
+.btn-primary:disabled { background: var(--text-subtle); cursor: not-allowed; opacity: 0.6; }
+
+.btn-secondary {
+  padding: 7px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all .15s;
+}
+.btn-secondary:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.btn-ghost {
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all .15s;
+}
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text); }
+.btn-ghost.danger:hover { background: rgba(181, 51, 51, 0.1); color: var(--danger); }
+
+/* ============================================================
+   Status bar
+   ============================================================ */
+.statusbar {
+  height: var(--statusbar-h);
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+.statusbar-left { display: flex; gap: 6px; }
+.status-tab {
+  padding: 3px 9px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: background .15s;
+}
+.status-tab:hover { background: var(--bg-hover); }
+.status-tab.active { background: var(--bg-active); color: var(--accent-text); font-weight: 500; }
+
+.status-indicator { display: flex; align-items: center; gap: 6px; }
+.status-indicator .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+}
+.status-indicator.busy .dot {
+  background: var(--accent);
+  animation: pulse-soft 1.6s ease-in-out infinite;
+}
+.status-indicator.error .dot { background: var(--danger); }
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+/* ============================================================
+   Modal — soft paper card
+   ============================================================ */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(40, 30, 20, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 160ms ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.modal {
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(40, 30, 20, 0.30);
+  width: min(620px, 92vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.modal-lg { width: min(760px, 94vw); }
+@keyframes slideUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-header h2 {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.modal-body { padding: 20px 22px; overflow-y: auto; flex: 1; }
+.modal-footer {
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Form — paper feel
+   ============================================================ */
+.form-row { margin-bottom: 14px; }
+.form-row label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.form-row label .optional {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-subtle);
+  font-style: italic;
+  margin-left: 6px;
+}
+.form-row input,
+.form-row textarea,
+.form-row select {
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.form-row textarea { resize: vertical; min-height: 80px; line-height: 1.55; font-family: var(--font-serif); }
+.form-row input:focus,
+.form-row textarea:focus,
+.form-row select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(201, 100, 66, 0.12);
+}
+.input-wrap { display: flex; gap: 6px; align-items: center; }
+.input-wrap input { flex: 1; }
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 18px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* ============================================================
+   Template list — like an index card system
+   ============================================================ */
+.template-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.template-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color .15s, background .15s;
+}
+.template-row:hover { border-color: var(--border-strong); background: var(--bg-elevated); }
+.template-row-info { flex: 1; min-width: 0; }
+.template-row-name {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+.template-row-preview {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.template-row-actions { display: flex; gap: 4px; }
+
+.template-type-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.template-type-badge.polish { background: var(--accent-soft); color: var(--accent-text); }
+.template-type-badge.mvp    { background: #f0e8d6; color: #8b6f1f; }
+.template-type-badge.custom { background: var(--bg-code); color: var(--text-muted); }
+.dark .template-type-badge.mvp { background: #3a3320; color: #c89b3c; }
+
+/* ============================================================
+   Toast
+   ============================================================ */
+.toast-container {
+  position: fixed;
+  top: 60px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1100;
+  pointer-events: none;
+}
+.toast {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text);
+  box-shadow: 0 4px 14px rgba(40, 30, 20, 0.10);
+  min-width: 240px;
+  max-width: 360px;
+  animation: slideInRight 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: auto;
+}
+.toast.success { border-left-color: var(--success); }
+.toast.error   { border-left-color: var(--danger); }
+.toast.warning { border-left-color: var(--warning); }
+@keyframes slideInRight {
+  from { transform: translateX(20px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+
+/* ============================================================
+   Generate modal — streaming output
+   ============================================================ */
+.stream-area {
+  margin-top: 12px;
+  padding: 14px 16px;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 40vh;
+  min-height: 160px;
+  overflow-y: auto;
+}
+.stream-area.thinking::after {
+  content: '●●●';
+  animation: thinking-dots 1.4s infinite;
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--accent);
+}
+@keyframes thinking-dots {
+  0%, 20%   { content: '●○○'; }
+  40%       { content: '●●○'; }
+  60%, 100% { content: '●●●'; }
+}
+
+/* ============================================================
+   Settings — sectioned like a notebook
+   ============================================================ */
+.settings-section {
+  margin-bottom: 28px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-section:last-child { border-bottom: none; padding-bottom: 0; }
+.settings-section h3 {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: var(--text);
+  letter-spacing: -0.005em;
+}
+.settings-section .hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+  line-height: 1.55;
+}
+
+.test-result {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.test-result.success { background: #e8f0e3; color: var(--success); border: 1px solid #c5e0bd; }
+.test-result.error   { background: #fbe7e7; color: var(--danger);  border: 1px solid #f5c8c8; }
+.test-result.loading { background: #fdf3e1; color: var(--warning); border: 1px solid #f0d9a8; }
+.dark .test-result.success { background: #1e2a1a; }
+.dark .test-result.error   { background: #2a1414; }
+.dark .test-result.loading { background: #2a2114; }
+
+/* ============================================================
+   Floating action button — terracotta paperweight
+   ============================================================ */
+.fab {
+  position: fixed;
+  bottom: 48px;
+  right: 22px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  color: #fff;
+  border: none;
+  box-shadow: var(--shadow-fab, 0 6px 20px rgba(201, 100, 66, 0.30), 0 2px 6px rgba(40, 30, 20, 0.12));
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 800;
+  transition: transform .15s, box-shadow .15s;
+  font-size: 22px;
+}
+.fab:hover {
+  transform: scale(1.06);
+  box-shadow: 0 8px 24px rgba(201, 100, 66, 0.40), 0 3px 8px rgba(40, 30, 20, 0.18);
+}
+.fab:active { transform: scale(0.96); }
+
+/* ============================================================
+   Markdown content rendering (for polished notes & MVP)
+   ============================================================ */
+.md { line-height: 1.65; }
+.md > *:first-child { margin-top: 0; }
+.md > *:last-child  { margin-bottom: 0; }
+.md h1, .md h2, .md h3, .md h4 {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  margin: 16px 0 8px;
+  line-height: 1.25;
+}
+.md h1 { font-size: 22px; }
+.md h2 { font-size: 18px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.md h3 { font-size: 16px; color: var(--accent); }
+.md h4 { font-size: 14px; }
+.md p  { margin: 8px 0; }
+.md ul, .md ol { margin: 8px 0; padding-left: 22px; }
+.md li { margin: 2px 0; }
+.md li > ul, .md li > ol { margin: 4px 0 4px; }
+.md strong { font-weight: 600; }
+.md em { font-style: italic; color: var(--text-muted); }
+.md code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-code);
+  color: var(--accent-text);
+}
+.md pre {
+  margin: 10px 0;
+  padding: 12px 14px;
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.md pre code { background: transparent; padding: 0; color: var(--text); }
+.md blockquote {
+  margin: 10px 0;
+  padding: 8px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-style: italic;
+}
+.md table {
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 13px;
+  width: 100%;
+}
+.md th, .md td {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.md th {
+  background: var(--bg-code);
+  font-weight: 600;
+}
+.md hr {
+  margin: 14px 0;
+  border: none;
+  border-top: 1px dashed var(--border-strong);
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 900px) {
+  :root { --sidebar-w: 230px; }
+  .editor { padding: 16px 22px 12px; }
+  .editor-title { font-size: 24px; }
+}
