@@ -18,7 +18,9 @@ type IconName =
   | "moon"
   | "sun"
   | "copy"
-  | "lightbulb";
+  | "lightbulb"
+  | "refresh"
+  | "download";
 
 export function Icon({
   name,
@@ -150,6 +152,22 @@ export function Icon({
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
           <path d="M9 18h6m-5 4h4M12 2a7 7 0 0 0-4 12.7c1 .86 1.5 1.5 1.5 2.8h5c0-1.3.5-1.94 1.5-2.8A7 7 0 0 0 12 2z" {...stroke} />
+        </svg>
+      );
+    case "refresh":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+          <path d="M3 12a9 9 0 0 1 15.5-6.3L21 8" {...stroke} />
+          <path d="M21 3v5h-5" {...stroke} />
+          <path d="M21 12a9 9 0 0 1-15.5 6.3L3 16" {...stroke} />
+          <path d="M3 21v-5h5" {...stroke} />
+        </svg>
+      );
+    case "download":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+          <path d="M12 3v12m0 0l-4-4m4 4l4-4" {...stroke} />
+          <path d="M3 17v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-2" {...stroke} />
         </svg>
       );
     default:
